@@ -1,4 +1,97 @@
 import streamlit as st
+import requests
+import random
+import pandas as pd
+import matplotlib.pyplot as plt
+from io import BytesIO
+import base64
+
+
+
+# --- SIDE HUSTLE DATA ---
+side_hustles = [
+    {"title": "Online Tutoring", "remote": True, "low_cost": True},
+    {"title": "Graphic Design", "remote": True, "low_cost": True},
+    {"title": "Dog Walking", "remote": False, "low_cost": True},
+    {"title": "Print-on-Demand Store", "remote": True, "low_cost": True},
+    {"title": "Tutoring (Online or Local)", "remote": True, "low_cost": True},
+    {"title": "Delivery Driver", "remote": False, "low_cost": False},
+    {"title": "Handyman Services", "remote": False, "low_cost": False},
+    {"title": "Affiliate Marketing", "remote": True, "low_cost": True},
+    {"title": "Selling Digital Products", "remote": True, "low_cost": True},
+    {"title": "Personal Assistant", "remote": False, "low_cost": False},
+]
+
+def get_random_side_hustle(remote_only=False, low_cost_only=False):
+    filtered = [
+        hustle for hustle in side_hustles
+        if (not remote_only or hustle["remote"]) and (not low_cost_only or hustle["low_cost"])
+    ]
+    if not filtered:
+        return "🚫 No side hustles found with those filters!"
+    return f"💼 {random.choice(filtered)['title']}"
+
+# --- BUSINESS IDEA GENERATOR ---
+industries = [
+    "Health & Wellness", "Food & Beverage", "Education", "Technology",
+    "Arts & Crafts", "E-commerce", "Pet Services", "Fitness", "Sustainability"
+]
+
+business_models = [
+    "subscription service", "mobile app", "online store", "freelance service",
+    "pop-up shop", "consulting agency", "local delivery", "coaching business",
+    "custom product line"
+]
+
+target_audiences = [
+    "busy professionals", "stay-at-home parents", "college students",
+    "small business owners", "remote workers", "eco-conscious consumers",
+    "pet owners", "artists and creatives", "seniors"
+]
+
+def generate_business_idea():
+    industry = random.choice(industries)
+    model = random.choice(business_models)
+    audience = random.choice(target_audiences)
+    return f"💡 A {industry.lower()} {model} for {audience}."
+
+def currencyconverter(base: str, target: str, amount: float) -> str:
+    API_KEY = "759cc97900658c57b71d7b1d"  # Your API key here
+    BASE_URL = f"https://v6.exchangerate-api.com/v6/{API_KEY}/latest/USD"
+
+    CARIBBEAN_CURRENCIES = ["XCD", "JMD", "TTD", "BBD", "BSD", "HTG", "CUP", "DOP"]
+    SUPPORTED = CARIBBEAN_CURRENCIES + ["USD"]
+
+    base = base.upper()
+    target = target.upper()
+
+    if base not in SUPPORTED:
+        return f"❌ Base currency '{base}' is not supported. Use Caribbean currencies or USD."
+    if target not in SUPPORTED:
+        return f"❌ Target currency '{target}' is not supported. Use Caribbean currencies or USD."
+
+    try:
+        response = requests.get(BASE_URL)
+        response.raise_for_status()
+        rates = response.json().get("conversion_rates", {})
+    except Exception as e:
+        return f"❌ Failed to fetch currency rates: {str(e)}"
+
+    if base != "USD" and base not in rates:
+        return f"❌ Base currency '{base}' not found in conversion rates."
+    if target != "USD" and target not in rates:
+        return f"❌ Target currency '{target}' not found in conversion rates."
+
+    if base == "USD":
+        converted = amount * rates.get(target, 0)
+    elif target == "USD":
+        converted = amount / rates.get(base, 1)
+    else:
+        usd_amount = amount / rates.get(base, 1)
+        converted = usd_amount * rates.get(target, 0)
+
+    return f"{amount:.2f} {base} = {converted:.2f} {target}"
+
 
 # --- PAGE CONFIG ---
 st.set_page_config(
@@ -122,6 +215,73 @@ if menu == "🏝️ Intro":
     👉 Head to the **Currency Converter**, **Budget Planner**, or **Quiz** to begin!  
     Or just explore the menu on the left to find what suits your goals best.
     """, unsafe_allow_html=True)
+
+
+elif menu == "💱 Currency Converter":
+    st.header("💱 Currency Converter")
+    st.markdown("Convert between **Caribbean currencies and USD** using up-to-date exchange rates.")
+
+    currencies = ["XCD", "JMD", "TTD", "BBD", "BSD", "HTG", "CUP", "DOP", "USD"]
+
+    col1, col2 = st.columns(2)
+    with col1:
+        base_currency = st.selectbox("From Currency", currencies, index=0)
+    with col2:
+        target_currency = st.selectbox("To Currency", currencies, index=8)
+
+    amount = st.number_input("Enter amount to convert", min_value=0.0, format="%.2f")
+
+    if st.button("Convert"):
+        result = currencyconverter(base_currency, target_currency, amount)
+        st.success(result)
+
+
+elif menu == "📊 Budget Plan Generator":
+    st.header("📊 Budget Plan Generator")
+    st.markdown("""
+        Input your **monthly income** and list your expenses by category.  
+        We'll show you your net income, savings strategy, and a budget breakdown chart.
+    """)
+
+    monthly_income = st.number_input("💰 Enter your total monthly income (USD)", min_value=0.0, step=50.0)
+
+    st.markdown("### 🧾 Add Your Expenses")
+    expense_data = []
+    expense_container = st.container()
+
+    with expense_container:
+        num_expenses = st.number_input("How many expense categories do you want to enter?", min_value=1, max_value=15, step=1, value=3)
+
+        for i in range(int(num_expenses)):
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                category = st.text_input(f"Category {i + 1}", key=f"cat_{i}")
+            with col2:
+                amount = st.number_input(f"Amount for {category or f'Item {i + 1}'}", min_value=0.0, key=f"amt_{i}")
+
+            if category:
+                expense_data.append({"Category": category, "Amount": amount})
+
+    if st.button("📈 Generate Budget Report"):
+        if monthly_income == 0 or not expense_data:
+            st.warning("Please provide both income and valid expense entries.")
+        else:
+            result = budgeting_function(monthly_income, expense_data)
+
+            st.subheader("💡 Budget Summary")
+            for key, value in result["summary"].items():
+                st.write(f"**{key}:** {value}")
+
+            st.subheader("🧮 Suggested Strategy (60/40 Rule on Net Income)")
+            for key, value in result["budget_strategy"].items():
+                st.write(f"**{key}:** ${value:,.2f}")
+
+            st.subheader("📊 Expense Breakdown")
+            st.dataframe(result["expense_breakdown"])
+
+            st.subheader("📉 Budget Chart")
+            st.image(f"data:image/png;base64,{result['chart_image_base64']}")
+
 
 elif menu == "🌍 Caribbean Saving & Investing":
     st.header("🌍 Saving & Investing in the ECCU")
@@ -255,25 +415,45 @@ elif menu == "🌍 Caribbean Saving & Investing":
         - Co-own land or rental properties with family.
         """)
 
+
 elif menu == "🧵 Small Hustles":
     st.header("🧵 Smart Hustle Suggestions")
-    st.markdown("""
-    Ideas for legal side jobs, part-time income, or self-employment ideas based on what’s common and profitable in the Caribbean:
+    st.markdown("Explore random side hustles or generate small business ideas tailored to your situation.")
 
-    - Reselling & Online Dropshipping
-    - Custom clothing / beauty services
-    - Agriculture (hot peppers, poultry, etc.)
-    - Freelance services (graphics, writing)
-    
+    st.subheader("💼 Find a Random Side Hustle")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        remote_only = st.checkbox("💻 Remote Only", value=True)
+    with col2:
+        low_cost_only = st.checkbox("💸 Low Startup Cost", value=True)
+
+    if st.button("🎲 Suggest a Side Hustle"):
+        suggestion = get_random_side_hustle(remote_only=remote_only, low_cost_only=low_cost_only)
+        st.success(suggestion)
+
+    st.markdown("---")
+
+    st.subheader("🚀 Generate a Business Idea")
+    if st.button("🎯 Give Me a Business Idea"):
+        idea = generate_business_idea()
+        st.info(idea)
+
+    st.markdown("---")
+    st.markdown("""
+        👇 Use these ideas to:
+        - Start a weekend hustle
+        - Launch an online business
+        - Earn extra income while in school
     """)
-    # --- INSERT STREAMLIT FUNCTION ---
-    st.markdown("*[Your hustle suggestions function goes here]*")
+
 
 elif menu == "🧠 Financial Literacy Quiz":
     st.header("🧠 Test Your Knowledge")
     st.markdown("Take a quiz to assess what you know about smart saving, investing, spending, and avoiding fraud.")
     # --- INSERT STREAMLIT FUNCTION ---
     st.markdown("*[Your financial literacy quiz function goes here]*")
+
 
 elif menu == "📚 Resources":
     st.header("📚 Regional Financial Education Resources")
