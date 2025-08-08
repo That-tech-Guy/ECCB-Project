@@ -1,0 +1,107 @@
+[
+    {
+        "title": "Online Tutoring\n",
+        "description": "Teaching students remotely in subjects you excel at via video and digital tools.\n",
+        "requirements": "Subject-matter expertise, reliable computer & internet, video conferencing tools, lesson planning, certification optional.\n", 
+        "remote": true, 
+        "low_cost": true
+    },
+    {
+        "title": "Graphic Design\n",
+        "description": "Creating visual content such as logos, flyers, and social media assets for clients.\n",
+        "requirements": "Strong design skills, mastery of tools like Adobe Creative Suite or Figma, professional portfolio, basic branding knowledge.\n", 
+        "remote": true, 
+        "low_cost": true
+    },
+    {
+        "title": "Dog Walking\n",
+        "description": "Providing exercise and care for pets in your local area.\n",
+        "requirements": "Physical fitness, empathy with animals, scheduling tools, local advertising.\n", 
+        "remote": false, 
+        "low_cost": true
+    },
+    {
+        "title": "Print-on-Demand Store\n",
+        "description": "Selling custom-designed products (like T-shirts or mugs) without holding inventory.\n",
+        "requirements": "Design skills, e-commerce setup, finding a reliable print-on-demand service, marketing strategy.\n", 
+        "remote": true, 
+        "low_cost": true
+    },
+    {
+        "title": "Affiliate Marketing\n",
+        "description": "Promoting products online and earning a commission for each sale made through your links.\n",
+        "requirements": "Content creation ability, SEO or social media skills, website or channel, knowledge of affiliate platforms.\n", 
+        "remote": false, 
+        "low_cost": false
+    },
+    {
+        "title": "Dropshipping\n",
+        "description": "Selling products online where the supplier ships items directly to the customer.\n",
+        "requirements": "Product research, e-commerce setup, supplier reliability, marketing, brand building.\n", 
+        "remote": true, 
+        "low_cost": false
+    },
+    {
+        "title": "Build Websites\n",
+        "description": "Developing websites for businesses or individuals using coding or CMS tools.\n",
+        "requirements": "HTML/CSS/JS or WordPress knowledge, hosting/domain setup, portfolio or client pitch skills.\n", 
+        "remote": true, 
+        "low_cost": true
+    },
+    {
+        "title": "Email Marketing\n",
+        "description": "Crafting and sending newsletters and campaigns to engage subscribers.\n",
+        "requirements": "Copywriting skills, familiarity with platforms like MailChimp, subscriber acquisition, analytics.\n", 
+        "remote": true, 
+        "low_cost": true
+    },
+    {
+        "title": "Virtual Assistant\n",
+        "description": "Supporting business operations remotely through tasks like email management and scheduling.\n",
+        "requirements": "Organization, communication, familiarity with admin tools (e.g., Google Workspace, Trello).\n", 
+        "remote": true, 
+        "low_cost": true
+    },
+    {
+        "title": "Transcription\n",
+        "description": "Converting audio into written text accurately and efficiently.\n",
+        "requirements": "Fast typing (≈60 WPM), good listening skills, quality headphones, transcription software.\n", 
+        "remote": false, 
+        "low_cost": true
+    },
+    {
+        "title": "Freelance Writing\n",
+        "description": "Creating articles, copy, or content for clients across industries.\n",
+        "requirements": "Strong writing/editing, SEO basics, portfolio or sample writing, familiarity with freelance platforms.\n", 
+        "remote": false, 
+        "low_cost": false
+    },
+    {
+        "title": "Online Surveys\n",
+        "description": "Filling out surveys and small tasks for reward platforms.\n",
+        "requirements": "Access to reputable platforms, patience for micro-tasks, consistent effort.\n", 
+        "remote": true, 
+        "low_cost": true
+    },
+    {
+        "title": "User Testing\n",
+        "description": "Evaluating websites/apps by providing usability feedback.\n",
+        "requirements": "Ability to articulate experience, stable internet, willingness to test diverse platforms.\n", 
+        "remote": true, 
+        "low_cost": false
+    },
+    {
+        "title": "Social Media Management\n",
+        "description": "Managing clients’ social profiles, creating content and planning engagement.\n",
+        "requirements": "Understanding of social platforms, content creation tools, scheduling software, client communication.\n", 
+        "remote": true, 
+        "low_cost": true
+    },
+    {
+        "title": "SEO Consulting\n",
+        "description": "Advising businesses on how to optimize content for search engines.\n",
+        "requirements": "Knowledge of SEO, analytics tools experience, keyword research capability, result-oriented mindset.\n", 
+        "remote": false, 
+        "low_cost": false
+    }
+]

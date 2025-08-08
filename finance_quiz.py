@@ -4,6 +4,13 @@ import time
 import json
 from pathlib import Path
 
+# =========================
+#   TIMING (TOTAL = 15s)
+# =========================
+ANSWER_TIME = 10   # seconds to choose
+REVEAL_TIME = 5    # seconds to view answer
+TOTAL_TIME = ANSWER_TIME + REVEAL_TIME
+
 def start_quiz():
 
     FILES_DIR = Path("files")
@@ -105,17 +112,12 @@ def start_quiz():
     #     AVATAR PICKER UI
     # =========================
     def avatar_picker():
-        """Persist selection in st.session_state.picked_avatar as user interacts.
-        Returns latest selection dict or None:
-        {'kind': 'emoji'|'image', 'emoji': str|None, 'image_bytes': bytes|None}
-        """
         if "picked_avatar" not in st.session_state:
             st.session_state.picked_avatar = None
 
         st.subheader("Choose your avatar")
         tabs = st.tabs(["🧩 Emoji avatars", "✨ Special emoji", "🖼️ Upload image"])
 
-        # --- Tab 1: Emoji catalog ---
         with tabs[0]:
             colA, colB = st.columns([1, 2])
             with colA:
@@ -123,23 +125,17 @@ def start_quiz():
             emojis = AVATAR_CATALOG[category]
             choice = st.radio("Pick one", emojis, horizontal=True, key="av_choice")
             with colB:
-                st.markdown(
-                    f"<div style='font-size:72px; line-height:1; text-align:center;'>{choice}</div>",
-                    unsafe_allow_html=True
-                )
+                st.markdown(f"<div style='font-size:72px; line-height:1; text-align:center;'>{choice}</div>",
+                            unsafe_allow_html=True)
             st.session_state.picked_avatar = {"kind": "emoji", "emoji": choice, "image_bytes": None}
 
-        # --- Tab 2: Special emoji (typed) ---
         with tabs[1]:
             custom_emoji = st.text_input("Type any emoji (e.g., 🐳, 😎, 🚀)", key="av_custom")
             if custom_emoji.strip():
-                st.markdown(
-                    f"<div style='font-size:72px; line-height:1; text-align:center;'>{custom_emoji}</div>",
-                    unsafe_allow_html=True
-                )
+                st.markdown(f"<div style='font-size:72px; line-height:1; text-align:center;'>{custom_emoji}</div>",
+                            unsafe_allow_html=True)
                 st.session_state.picked_avatar = {"kind": "emoji", "emoji": custom_emoji.strip(), "image_bytes": None}
 
-        # --- Tab 3: Upload image ---
         with tabs[2]:
             img = st.file_uploader("Upload a square PNG/JPG (suggested ~256×256)", type=["png", "jpg", "jpeg"], key="av_upload")
             if img is not None:
@@ -153,54 +149,35 @@ def start_quiz():
     #     STYLISH PODIUM
     # =========================
     def render_podium(category_scores):
-        """Clean & well-spaced podium using Streamlit columns: 2nd | 1st | 3rd."""
         top3 = category_scores[:3]
         while len(top3) < 3:
             top3.append(None)
 
-        # Medal order mapping: left=2nd, center=1st, right=3rd
         slots = {
             "second": top3[1] if len(top3) > 1 else None,
             "first":  top3[0] if len(top3) > 0 else None,
             "third":  top3[2] if len(top3) > 2 else None,
         }
 
-        # Simple styles, no grid/flex wars
         card_css = """
             <style>
             .podium-card {
-                width: 100%;
-                max-width: 320px;
-                margin: 0 auto;
-                position: relative;
+                width: 100%; max-width: 320px; margin: 0 auto; position: relative;
                 background: radial-gradient(140% 120% at 50% 0%, #ffffff 20%, #f7fbff 100%);
-                border-radius: 16px;
-                padding: 18px 12px 14px;
-                text-align: center;
+                border-radius: 16px; padding: 18px 12px 14px; text-align: center;
                 box-shadow: 0 14px 26px rgba(13,110,253,0.06);
-                border: 2px solid transparent;
-                background-clip: padding-box;
+                border: 2px solid transparent; background-clip: padding-box;
             }
             .podium-card::before {
-                content: "";
-                position: absolute; inset: -2px;
-                border-radius: 18px;
-                z-index: -1;
+                content: ""; position: absolute; inset: -2px; border-radius: 18px; z-index: -1;
                 background: linear-gradient(120deg, #7ab8ff, #ffd26a, #e7b6ff, #7ab8ff);
-                background-size: 300% 300%;
-                animation: borderflow 6s ease infinite;
+                background-size: 300% 300%; animation: borderflow 6s ease infinite;
             }
-            @keyframes borderflow {
-                0% { background-position: 0% 50%; }
-                50% { background-position: 100% 50%; }
-                100% { background-position: 0% 50%; }
-            }
+            @keyframes borderflow { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
             .medal { font-size: 46px; line-height: 1; }
-            .crown {
-                font-size: 24px; position: absolute; top: -12px; left: 50%;
-                transform: translateX(-50%) rotate(-10deg);
-                filter: drop-shadow(0 2px 2px rgba(0,0,0,0.15));
-            }
+            .crown { font-size: 24px; position: absolute; top: -12px; left: 50%;
+                     transform: translateX(-50%) rotate(-10deg);
+                     filter: drop-shadow(0 2px 2px rgba(0,0,0,0.15)); }
             .avatar-emoji { font-size: 44px; line-height: 1.1; margin: 6px 0 2px; }
             .name { font-weight: 800; font-size: 18px; color: #1d2a44; margin-top: 4px; letter-spacing: .2px; }
             .country { color: #5a6782; font-size: 13px; margin-top: 2px; }
@@ -209,22 +186,16 @@ def start_quiz():
                 background: #eef6ff; color: #0d6efd; border-radius: 999px; border: 1px solid #dbeaff;
                 box-shadow: inset 0 0 0 2px rgba(255,255,255,0.7);
             }
-            .pedestal {
-                height: 10px; margin-top: 10px;
-                border-radius: 10px 10px 0 0;
-                background: linear-gradient(180deg,#dfeaff,#b9d3ff);
-                box-shadow: inset 0 -6px 12px rgba(13,110,253,.12);
-                border: 1px solid #cfe0ff;
-                max-width: 320px; margin-left: auto; margin-right: auto;
-            }
-            /* Make #1 float very slightly */
+            .pedestal { height: 10px; margin-top: 10px; border-radius: 10px 10px 0 0;
+                        background: linear-gradient(180deg,#dfeaff,#b9d3ff);
+                        box-shadow: inset 0 -6px 12px rgba(13,110,253,.12);
+                        border: 1px solid #cfe0ff; max-width: 320px; margin-left: auto; margin-right: auto; }
             .floaty { animation: floaty 1.8s ease-in-out infinite alternate; }
-            @keyframes floaty { from { transform: translateY(-2%); } to { transform: translateY(0%); } }
+            @keyframes floaty { from { transform: translateY(-2%);} to { transform: translateY(0%);} }
             </style>
         """
         st.markdown(card_css, unsafe_allow_html=True)
 
-        # Five columns: side spacer | 2nd | 1st | 3rd | side spacer
         cL, c2, c1, c3, cR = st.columns([1, 3, 4, 3, 1])
 
         def render_slot(col, slot_name, data, y_offset_px, pedestal_h):
@@ -254,8 +225,8 @@ def start_quiz():
                 country = data.get("country", "—")
                 sc = data.get("score", 0)
                 tot = data.get("total", 0)
-
                 floaty = " floaty" if slot_name == "first" else ""
+
                 st.markdown(
                     f"""
                     <div style="margin-top:{y_offset_px}px;">
@@ -273,14 +244,10 @@ def start_quiz():
                     unsafe_allow_html=True
                 )
 
-        # Offsets & pedestal heights: first is highest, 2nd/3rd pushed down a bit
-        render_slot(c2, "second", slots["second"], y_offset_px=30, pedestal_h=38)  # left
-        render_slot(c1, "first",  slots["first"],  y_offset_px=0,  pedestal_h=56)  # center (tallest)
-        render_slot(c3, "third",  slots["third"],  y_offset_px=40, pedestal_h=30)  # right
-
-        # Real margin below podium to separate from placement / leaderboard
+        render_slot(c2, "second", slots["second"], y_offset_px=30, pedestal_h=38)
+        render_slot(c1, "first",  slots["first"],  y_offset_px=0,  pedestal_h=56)
+        render_slot(c3, "third",  slots["third"],  y_offset_px=40, pedestal_h=30)
         st.markdown("<div style='height: 36px;'></div>", unsafe_allow_html=True)
-
 
     # =========================
     #     SESSION STATE INIT
@@ -307,11 +274,9 @@ def start_quiz():
         country = st.selectbox("Select your country:", eccb_countries)
         picked = avatar_picker()
 
-        # Difficulty selection
         difficulty_choice = st.selectbox("Select difficulty:", list(difficulty_map.keys()))
         requested_num = difficulty_map[difficulty_choice]
 
-        # Available questions guard
         max_available = len(questions)
         if max_available == 0:
             st.stop()
@@ -325,7 +290,6 @@ def start_quiz():
             elif picked is None:
                 st.warning("Please choose an avatar before starting.")
             else:
-                # store details
                 ss.username = username.strip()
                 ss.country = country
                 ss.avatar_kind = picked["kind"]
@@ -334,7 +298,6 @@ def start_quiz():
                 ss.category = difficulty_choice
                 ss.setup_done = True
 
-                # build quiz set
                 ss.quiz_questions = random.sample(questions, num_questions)
                 ss.question_index = 0
                 ss.last_run_time = time.time()
@@ -351,7 +314,6 @@ def start_quiz():
     # =========================
     # End-of-quiz guard
     if ss.question_index >= len(ss.quiz_questions):
-        # Save result once
         if not ss.score_saved:
             save_score({
                 "username": ss.username,
@@ -371,12 +333,9 @@ def start_quiz():
         with st.spinner("Crunching the results..."):
             time.sleep(1.0)
 
-        # Leaderboard (by category)
         st.subheader(f"🏅 Leaderboard — {ss.category}")
         scores = load_scores()
         category_scores = [s for s in scores if s.get("category") == ss.category]
-
-        # Sort by accuracy first (score/total), then raw score, total, username
         category_scores.sort(
             key=lambda x: (
                 x.get("score", 0) / max(1, x.get("total", 1)),
@@ -387,7 +346,6 @@ def start_quiz():
             reverse=True
         )
 
-        # Find current player's placement
         placement = None
         for idx, s in enumerate(category_scores):
             if (
@@ -400,7 +358,6 @@ def start_quiz():
                 placement = idx + 1
                 break
 
-        # Toast result
         if placement == 1:
             st.toast("🥇 You placed 1st — Champion!", icon="🎉")
         elif placement == 2:
@@ -410,38 +367,26 @@ def start_quiz():
         else:
             st.toast(f"You placed #{placement or '—'} — keep climbing!", icon="👍")
 
-        # Render flashy podium
         render_podium(category_scores)
 
-        # “Your placement” card
         if placement:
             place_emoji = "🏆" if placement == 1 else "🥈" if placement == 2 else "🥉" if placement == 3 else "🎯"
             st.success(f"{place_emoji} **Your placement:** #{placement} in **{ss.category}**")
 
-        # --- Top 10 list ---
         st.markdown("### Top 10")
         st.markdown("""
             <style>
-            .lb-row {
-                display: grid; grid-template-columns: 48px 1fr 140px 120px; gap: 8px;
-                align-items: center; padding: 10px 12px; border-bottom: 1px solid #eef1f6;
-            }
+            .lb-row { display: grid; grid-template-columns: 48px 1fr 140px 120px; gap: 8px;
+                      align-items: center; padding: 10px 12px; border-bottom: 1px solid #eef1f6; }
             .lb-row:nth-child(odd) { background: #fafcff; }
-            .lb-rank {
-                font-weight: 800; text-align: center; padding: 8px; border-radius: 10px; background: #f2f6ff; color: #224; 
-            }
+            .lb-rank { font-weight: 800; text-align: center; padding: 8px; border-radius: 10px; background: #f2f6ff; color: #224; }
             .lb-name { font-weight: 700; }
             .lb-country { color: #556; font-size: 13px; }
-            .lb-score {
-                text-align: right; font-weight: 800; color: #0d6efd;
-            }
-            .lb-pct {
-                text-align: right; color: #445;
-            }
+            .lb-score { text-align: right; font-weight: 800; color: #0d6efd; }
+            .lb-pct { text-align: right; color: #445; }
             </style>
         """, unsafe_allow_html=True)
 
-        # Header row
         st.markdown("""
             <div class='lb-row' style='font-size:13px; font-weight:800; color:#334; background:#f6f9ff; border-top: 1px solid #e8eef8;'>
                 <div>#</div>
@@ -469,34 +414,25 @@ def start_quiz():
                 </div>
             """, unsafe_allow_html=True)
 
-        # Custom CSS for a popping button
         st.markdown("""
             <style>
             .play-again-btn > button {
-                background: linear-gradient(90deg, #ff7b00, #ff006a);
-                color: white !important;
-                font-size: 18px;
-                font-weight: bold;
-                border-radius: 12px;
-                border: none;
-                padding: 0.6em 1.2em;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                background: linear-gradient(90deg, #ff7b00, #ff006a); color: white !important;
+                font-size: 18px; font-weight: bold; border-radius: 12px; border: none;
+                padding: 0.6em 1.2em; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
                 transition: all 0.3s ease;
             }
             .play-again-btn > button:hover {
-                transform: scale(1.05);
-                box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+                transform: scale(1.05); box-shadow: 0 6px 18px rgba(0,0,0,0.25);
                 background: linear-gradient(90deg, #ff006a, #ff7b00);
             }
             </style>
         """, unsafe_allow_html=True)
 
-        # The button with a custom container to apply the style
         if st.container():
             play_again = st.container()
             with play_again:
                 if st.button("🔄 Play Again", key="play_again", help="Restart the quiz", type="primary"):
-                    # Reset quiz state
                     ss.setup_done = False
                     ss.question_index = 0
                     ss.selected_option = None
@@ -513,7 +449,6 @@ def start_quiz():
                     ss.avatar_image_bytes = None
                     st.rerun()
 
-
         st.stop()
 
     # Current question
@@ -523,12 +458,11 @@ def start_quiz():
     st.markdown("""
         <style>
             .big-question { font-size: 28px; font-weight: bold; color: #007bff; }
-            .option-button { font-size: 22px; padding: 0.5em; margin: 0.3em; }
             .headerbar { font-size: 16px; padding: 8px 12px; background: #f7fbff; border: 1px solid #e3f2ff; border-radius: 10px; margin-bottom: 10px; }
         </style>
     """, unsafe_allow_html=True)
 
-    # Header with avatar + username + country + running score
+    # Header
     st.markdown("<div class='headerbar'>", unsafe_allow_html=True)
     col_avatar, col_meta = st.columns([1, 6])
     with col_avatar:
@@ -546,7 +480,7 @@ def start_quiz():
         )
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Placeholders for clean UI transitions
+    # Placeholders
     question_placeholder = st.empty()
     options_placeholder = st.empty()
     answer_placeholder = st.empty()
@@ -555,11 +489,11 @@ def start_quiz():
 
     elapsed = time.time() - ss.last_run_time
 
-    # === PHASE 1: Question & Buttons (0–5s) ===
-    if elapsed < 5:
+    # === PHASE 1: Question & Buttons (0–ANSWER_TIME) ===
+    if elapsed < ANSWER_TIME:
         question_placeholder.markdown(f"<div class='big-question'>🧠 {q['question']}</div>", unsafe_allow_html=True)
-        info_placeholder.info("⏳ Choose an option or wait. Showing answer in 5 seconds...")
-        progress_placeholder.progress(min(elapsed / 5, 1.0))
+        info_placeholder.info(f"⏳ Choose an option or wait. Showing answer in {ANSWER_TIME} seconds...")
+        progress_placeholder.progress(min(elapsed / ANSWER_TIME, 1.0))
 
         with options_placeholder.container():
             cols = st.columns(2)
@@ -567,18 +501,17 @@ def start_quiz():
                 if cols[i % 2].button(option, key=f"opt_{ss.question_index}_{i}"):
                     ss.selected_option = option
                     # jump straight to reveal phase
-                    ss.last_run_time = time.time() - 5.01
+                    ss.last_run_time = time.time() - ANSWER_TIME - 0.01
                     st.rerun()
 
         time.sleep(0.12)
         st.rerun()
 
-    # === PHASE 2: Reveal Answers (5–10s) ===
-    elif elapsed < 10:
+    # === PHASE 2: Reveal Answers (ANSWER_TIME–TOTAL_TIME) ===
+    elif elapsed < TOTAL_TIME:
         question_placeholder.markdown(f"<div class='big-question'>🧠 {q['question']}</div>", unsafe_allow_html=True)
         options_placeholder.empty()  # hide buttons during reveal
 
-        # Score ONCE when entering reveal
         qkey = ss.question_index
         if not ss.scored_flags.get(qkey, False):
             if ss.selected_option == q["answer"]:
@@ -598,15 +531,14 @@ def start_quiz():
                         label += " — Your choice"
                     st.error(label)
 
-        progress_placeholder.progress(min((elapsed - 5) / 5, 1.0))
-        info_placeholder.info("➡️ Next question in 5 seconds...")
+        progress_placeholder.progress(min((elapsed - ANSWER_TIME) / REVEAL_TIME, 1.0))
+        info_placeholder.info(f"➡️ Next question in {REVEAL_TIME} seconds...")
 
         time.sleep(0.12)
         st.rerun()
 
-    # === PHASE 3: Advance (>=10s) ===
+    # === PHASE 3: Advance (>= TOTAL_TIME) ===
     else:
-        # Clean up UI before next question
         question_placeholder.empty()
         options_placeholder.empty()
         answer_placeholder.empty()
@@ -617,5 +549,5 @@ def start_quiz():
         ss.last_run_time = time.time()
         ss.selected_option = None
 
-        # End-of-quiz handled above
         st.rerun()
+
