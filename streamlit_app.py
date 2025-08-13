@@ -6,7 +6,7 @@ from save_invest import invest
 from small_hustles import run_small_hustles
 from common_scams import run_common_scams
 from intro_page import run_into
-from chatbot_widget import render_chatbot_overlay
+from chatbot_overlay import render_chatbot_overlay
 # --- add near top of streamlit_app.py ---
 import threading, json, time
 from pathlib import Path
