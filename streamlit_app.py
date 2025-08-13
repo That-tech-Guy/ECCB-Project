@@ -7,6 +7,7 @@ from small_hustles import run_small_hustles
 from common_scams import run_common_scams
 from intro_page import run_into
 from chatbot_overlay import render_chatbot_overlay
+from chatbot import render_chatbot
 
 # --- add near top of streamlit_app.py ---
 import os, threading, json, time, socket, requests
@@ -179,6 +180,7 @@ st.sidebar.image("images/eccb.png", width=100)
 st.sidebar.title("Menu")
 menu = st.sidebar.radio("Navigate", [
     "🏝️ Intro",
+    "🤖 AI Chat Bot",
     "💱 Currency Converter",
     "🌍 Caribbean Saving & Investing",
     "📊 Budget Plan Generator",
@@ -206,6 +208,9 @@ render_chatbot_overlay(title="ECCB Assistant", corner="right")
 if menu == "🏝️ Intro":
     run_into()
     
+
+elif menu == "🤖 AI Chat Bot":
+    render_chatbot()
 
 
 elif menu == "💱 Currency Converter":
@@ -243,8 +248,11 @@ elif menu == "📚 Resources":
 
     st.info("Feel free to submit your own financial learning resources for your territory!")
 
+if menu == "🤖 AI Chat Bot":
+    st.markdown("")
 
-st.markdown("""
----
-<center>Made by "664RugRats" for the 2025 ECCB Challenge 💡</center>
-""", unsafe_allow_html=True)
+else:
+    st.markdown("""
+    ---
+    <center>Made by "664RugRats" for the 2025 ECCB Challenge 💡</center>
+    """, unsafe_allow_html=True)

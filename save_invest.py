@@ -1,5 +1,125 @@
 import streamlit as st
 
+def investing_advice(country: str, age_group: str = "youth"):
+    """
+    Returns investment advice for a given ECCU country and age group.
+
+    Args:
+        country (str): Name of ECCU country (must match exactly from list below).
+        age_group (str): "youth" for ages 13–25, "adult" for ages 26+.
+
+    Returns:
+        list[str]: A list of recommended saving & investing strategies.
+    """
+    data = {
+        "Anguilla": {
+            "youth": [
+                "Open a Youth Saver Account at NCBA — zero fees, good interest.",
+                "Use prepaid debit cards to manage spending.",
+                "Invest in small mobile vending or online digital services."
+            ],
+            "adult": [
+                "Consider fixed deposits or property co-investment with NCBA.",
+                "Join Anguilla’s Credit Union for saving clubs & low-interest loans.",
+                "Use Republic Bank’s online investment platform for bonds/mutual funds."
+            ]
+        },
+        "Antigua & Barbuda": {
+            "youth": [
+                "Join the Youth Saver Program at ECAB.",
+                "Learn investment basics via Antigua Commercial Bank’s Junior Savings Plan.",
+                "Save weekly from small side hustles like juice sales or online gigs."
+            ],
+            "adult": [
+                "Invest in government bonds through ECSE.",
+                "Explore real estate opportunities as tourism expands.",
+                "Join rotating saving groups (‘sou-sou’) via trusted credit unions."
+            ]
+        },
+        "Dominica": {
+            "youth": [
+                "Open a Wise Start Savings account at National Bank of Dominica.",
+                "Join Junior Investment Clubs through schools or youth orgs.",
+                "Start agro-based side hustles like hot pepper sauce or small farming."
+            ],
+            "adult": [
+                "Use NBD’s Certificate of Deposits or Savings Plans.",
+                "Invest in green economy opportunities like solar energy or eco-tourism.",
+                "Explore land ownership through government land programs."
+            ]
+        },
+        "Grenada": {
+            "youth": [
+                "Join Grenada Co-operative Bank’s Early Savers Club.",
+                "Learn about stocks via ECCB’s youth bootcamps.",
+                "Save income from crafts or digital freelancing."
+            ],
+            "adult": [
+                "Use GCB’s fixed deposit options with high yields.",
+                "Invest in agriculture (nutmeg, cocoa) or eco-tourism.",
+                "Use Republic Bank’s financial planning services."
+            ]
+        },
+        "Montserrat": {
+            "youth": [
+                "Join Junior Savings Club with Bank of Montserrat.",
+                "Save from summer jobs or small tech services like tutoring.",
+                "Attend ECCB’s youth financial literacy events."
+            ],
+            "adult": [
+                "Open a term deposit account at Bank of Montserrat.",
+                "Explore government-backed investment funds.",
+                "Partner with locals for housing co-investment projects."
+            ]
+        },
+        "St. Kitts & Nevis": {
+            "youth": [
+                "Sign up for the Youth Future Saver program at SKNANB.",
+                "Save carnival and holiday income.",
+                "Join youth-led co-op savings clubs through school."
+            ],
+            "adult": [
+                "Buy into real estate or tourism shares.",
+                "Use Citizenship-by-Investment program returns wisely.",
+                "Invest in solar farms or local energy co-ops."
+            ]
+        },
+        "St. Lucia": {
+            "youth": [
+                "Save in First National Bank St. Lucia’s Youth Account.",
+                "Learn investing basics via SLU Stock Exchange training series.",
+                "Try digital marketing or reselling for low-risk income."
+            ],
+            "adult": [
+                "Explore savings & loans at St. Lucia Credit Co-op.",
+                "Invest in tourism-side land leasing or apartment sharing.",
+                "Buy government-issued Treasury Bills or Bonds."
+            ]
+        },
+        "St. Vincent & the Grenadines": {
+            "youth": [
+                "Join Bank of SVG’s Youth Savers Club.",
+                "Save income from weekend jobs or digital freelancing.",
+                "Learn business skills through school enterprise programs."
+            ],
+            "adult": [
+                "Use Bank of SVG’s fixed-term accounts or credit union saving circles.",
+                "Invest in fishing or agro-processing equipment.",
+                "Co-own land or rental properties with family."
+            ]
+        }
+    }
+
+    # Normalize inputs
+    country = country.strip()
+    age_group = age_group.lower()
+
+    if country not in data:
+        return [f"No data found for '{country}'. Please choose a valid ECCU country."]
+    if age_group not in ["youth", "adult"]:
+        return ["Invalid age group. Please choose 'youth' or 'adult'."]
+
+    return data[country][age_group]
 
 
 

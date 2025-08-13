@@ -79,7 +79,23 @@ def load_side_hustles(path: Path = SIDE_HUSTLES_JSON) -> List[Dict[str, Any]]:
 # ---------------------------------
 # Core logic
 # ---------------------------------
-def get_random_side_hustle(hustles: List[Dict[str, Any]], remote_only=False, low_cost_only=False) -> Optional[Dict[str, Any]]:
+
+def get_random_side_hustle(
+    hustles: List[Dict[str, Any]],
+    remote_only: bool = False, 
+    low_cost_only: bool = False
+) -> Optional[Dict[str, Any]]:
+    """
+    Returns a random side hustle from the list, with optional filtering.
+
+    Args:
+        hustles (list): The list of side hustle dictionaries.
+        remote_only (bool): If True, only return remote options.
+        low_cost_only (bool): If True, only return low-cost options.
+
+    Returns:
+        dict | None: A single side hustle dictionary or None if no match.
+    """
     filtered = [
         h for h in hustles
         if (not remote_only or h["remote"]) and (not low_cost_only or h["low_cost"])
@@ -88,11 +104,48 @@ def get_random_side_hustle(hustles: List[Dict[str, Any]], remote_only=False, low
         return None
     return random.choice(filtered)
 
-def generate_business_idea() -> str:
-    industry = random.choice(INDUSTRIES)
-    model = random.choice(BUSINESS_MODELS)
-    audience = random.choice(TARGET_AUDIENCES)
-    return f"💡 A {industry.lower()} {model} for {audience}."
+def get_random_side_job(
+    remote_only: bool = False, 
+    low_cost_only: bool = False
+) -> Optional[Dict[str, Any]]:
+    """
+    Returns a random side hustle from the list, with optional filtering.
+
+    Args:
+        hustles (list): The list of side hustle dictionaries.
+        remote_only (bool): If True, only return remote options.
+        low_cost_only (bool): If True, only return low-cost options.
+
+    Returns:
+        dict | None: A single side hustle dictionary or None if no match.
+    """
+    side_hustles = load_side_hustles()
+
+    filtered = [
+        h for h in side_hustles
+        if (not remote_only or h["remote"]) and (not low_cost_only or h["low_cost"])
+    ]
+    if not filtered:
+        return None
+    return random.choice(filtered)
+
+def generate_business_idea(count: int = 1) -> list:
+    """
+    Generates one or more random business ideas.
+
+    Args:
+        count (int): Number of business ideas to generate.
+
+    Returns:
+        list[str]: A list of generated business ideas.
+    """
+    ideas = []
+    for _ in range(count):
+        industry = random.choice(INDUSTRIES)
+        model = random.choice(BUSINESS_MODELS)
+        audience = random.choice(TARGET_AUDIENCES)
+        ideas.append(f"💡 A {industry.lower()} {model} for {audience}.")
+    return ideas
 
 # ---------------------------------
 # UI wrapper

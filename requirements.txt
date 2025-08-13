@@ -6,3 +6,13 @@ requests>=2.31
 Pillow>=10.3
 fastapi
 uvicorn
+yfinance
+googlesearch-python 
+pycountry
+wikipedia
+ddgs
+PyPDF2
+dotenv
+agno
+openai
+duckduckgo-search

@@ -91,6 +91,7 @@ def _rate_chip(base: str, target: str, rates: Dict[str, float], deltas: Dict[Tup
 # YOUR EXISTING FUNCTIONS
 # =========================
 def currencyconverter(base: str, target: str, amount: float) -> str:
+    """ Convert currency """
     base = base.upper()
     target = target.upper()
 
