@@ -6,6 +6,90 @@ from save_invest import invest
 from small_hustles import run_small_hustles
 from common_scams import run_common_scams
 from intro_page import run_into
+from chatbot_widget import render_chatbot_overlay
+# --- add near top of streamlit_app.py ---
+import threading, json, time
+from pathlib import Path
+
+def start_api_server_once():
+    import socket
+    def port_free(port:int)->bool:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            return s.connect_ex(("127.0.0.1", port)) != 0
+
+    if not port_free(7861):
+        return  # already running
+
+    from fastapi import FastAPI, Request
+    from fastapi.middleware.cors import CORSMiddleware
+    import uvicorn
+
+    app = FastAPI()
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"], allow_credentials=True,
+        allow_methods=["*"], allow_headers=["*"]
+    )
+
+    DATA_DIR = Path("/mnt/data/chat_data"); DATA_DIR.mkdir(parents=True, exist_ok=True)
+    USERS = DATA_DIR/"chat_users.json"
+
+    def load_json(p:Path, default):
+        try:
+            return json.loads(p.read_text())
+        except Exception:
+            return default
+
+    def save_json(p:Path, data):
+        p.write_text(json.dumps(data, indent=2))
+
+    @app.post("/chatapi/register")
+    async def register(payload: dict):
+        uid = payload.get("uid")
+        if not uid: return {"ok": False, "error": "missing uid"}
+        users = load_json(USERS, {})
+        users[uid] = {
+            "name": payload.get("name",""),
+            "country": payload.get("country",""),
+            "email": payload.get("email",""),
+            "updated": int(time.time()*1000)
+        }
+        save_json(USERS, users)
+        # ensure user history file exists
+        hist_path = DATA_DIR / f"chat_{uid}.json"
+        if not hist_path.exists(): save_json(hist_path, {"history": []})
+        return {"ok": True}
+
+    @app.post("/chatapi/log")
+    async def log(payload: dict):
+        uid = payload.get("uid")
+        entry = payload.get("entry")
+        if not uid or not isinstance(entry, dict):
+            return {"ok": False, "error": "bad payload"}
+        hist_path = DATA_DIR / f"chat_{uid}.json"
+        hist = load_json(hist_path, {"history": []})
+        hist["history"].append(entry)
+        save_json(hist_path, hist)
+        return {"ok": True}
+
+    @app.get("/chatapi/history")
+    async def history(uid: str):
+        hist_path = DATA_DIR / f"chat_{uid}.json"
+        hist = load_json(hist_path, {"history": []})
+        return hist
+
+    def run():
+        uvicorn.run(app, host="127.0.0.1", port=7861, log_level="warning")
+
+    th = threading.Thread(target=run, daemon=True)
+    th.start()
+
+# start it once
+try:
+    start_api_server_once()
+except Exception as e:
+    # If FastAPI/uvicorn not installed, just skip; the client will work with localStorage only.
+    pass
 
 
 # --- PAGE CONFIG ---
@@ -37,6 +121,10 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+
+
+
+render_chatbot_overlay(title="ECCB Assistant", corner="right")
 
 # --- PAGE CONTENT ---
 if menu == "🏝️ Intro":
