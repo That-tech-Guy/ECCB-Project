@@ -1,7 +1,8 @@
 import os
+import time
 import requests
+import pycountry
 import streamlit as st
-
 
 from currency_converter import currencyconverter
 from common_scams import commonscams2
@@ -17,11 +18,25 @@ from agno.tools.googlesearch import GoogleSearchTools
 from agno.tools.hackernews import HackerNewsTools
 from agno.tools.wikipedia import WikipediaTools
 
+# ----------------------------
+# OpenRouter model + key setup
+# ----------------------------
+API_KEY = os.getenv("OPENROUTER_API_KEY") or st.secrets.get("OPENROUTER_API_KEY")
+if not API_KEY:
+    raise RuntimeError(
+        "Missing OPENROUTER_API_KEY. Set it in your environment or .streamlit/secrets.toml"
+    )
 
-# 🛡️ Setup API key (either from environment or hardcoded here)
-api_key = os.getenv("OPENROUTER_API_KEY")
+MODEL_ID = os.getenv("OPENROUTER_MODEL") or st.secrets.get("OPENROUTER_MODEL") or "google/gemini-2.5-flash"
 
-# 🌍 ECCU context and dynamic instruction template
+# Optional profile fields (not required here, but available if you want them elsewhere)
+profile = st.session_state.get("user_profile", {})
+base_currency = profile.get("base_currency", "XCD")
+tone = profile.get("tone", "Friendly")
+
+# ----------------------------
+# ECCU context + persona tone
+# ----------------------------
 ECCU_COUNTRIES = [
     "Antigua and Barbuda",
     "Dominica",
@@ -32,17 +47,7 @@ ECCU_COUNTRIES = [
     "Anguilla",
     "Montserrat",
 ]
-
-ECCU_COUNTRY_CODES = {
-    "AG": "Antigua and Barbuda",
-    "DM": "Dominica",
-    "GD": "Grenada",
-    "KN": "Saint Kitts and Nevis",
-    "LC": "Saint Lucia",
-    "VC": "Saint Vincent and the Grenadines",
-    "AI": "Anguilla",
-    "MS": "Montserrat",
-}
+_ECCU_SET = set(ECCU_COUNTRIES)
 
 COUNTRY_TONE = {
     "Antigua and Barbuda": {
@@ -123,109 +128,179 @@ Quiz style:
 - Offer next-step actions after the quiz (budgeting, side hustles, scam tips).
 """
 
+# ----------------------------
+# Location detection (profile-first, then IP)
+# ----------------------------
 
-def detect_user_location() -> dict:
-    """Detect user location robustly via multiple providers and cache it."""
-    if "user_location" in st.session_state:
-        return st.session_state.user_location
+# Normalize common aliases -> ISO names
+_ALIASES = {
+    "Antigua & Barbuda": "Antigua and Barbuda",
+    "St. Kitts & Nevis": "Saint Kitts and Nevis",
+    "St Kitts & Nevis": "Saint Kitts and Nevis",
+    "St. Lucia": "Saint Lucia",
+    "St Lucia": "Saint Lucia",
+    "St. Vincent & the Grenadines": "Saint Vincent and the Grenadines",
+    "St Vincent & the Grenadines": "Saint Vincent and the Grenadines",
+}
 
-    location = {
-        "country": None,
-        "region": None,
-        "city": None,
-        "latitude": None,
-        "longitude": None,
-        "is_eccu": False,
+# Country -> preferred currency
+_COUNTRY_TO_CURRENCY = {
+    # ECCU block
+    "Anguilla": "XCD",
+    "Antigua and Barbuda": "XCD",
+    "Dominica": "XCD",
+    "Grenada": "XCD",
+    "Montserrat": "XCD",
+    "Saint Kitts and Nevis": "XCD",
+    "Saint Lucia": "XCD",
+    "Saint Vincent and the Grenadines": "XCD",
+    # Wider Caribbean commonly used
+    "Barbados": "BBD",
+    "Trinidad and Tobago": "TTD",
+    "Jamaica": "JMD",
+    "Bahamas": "BSD",
+    "Haiti": "HTG",
+    "Cuba": "CUP",
+    "Dominican Republic": "DOP",
+    # Fallbacks
+    "United States": "USD",
+    "United Kingdom": "GBP",
+    "Canada": "CAD",
+    "France": "EUR",
+}
+
+def _normalize_country_name(name: str | None) -> str:
+    if not name:
+        return ""
+    name = name.strip()
+    return _ALIASES.get(name, name)
+
+def _country_to_iso2(name: str) -> str | None:
+    try:
+        c = pycountry.countries.lookup(_normalize_country_name(name))
+        return c.alpha_2
+    except Exception:
+        return None
+
+def _build_location(country: str, city: str = "", lat=None, lon=None, source="profile/ip/override") -> dict:
+    country_norm = _normalize_country_name(country)
+    iso2 = _country_to_iso2(country_norm) if country_norm else None
+    currency = _COUNTRY_TO_CURRENCY.get(country_norm)
+    return {
+        "country": country_norm or None,
+        "country_code": iso2,
+        "city": city or None,
+        "latitude": lat,
+        "longitude": lon,
+        "currency": currency,
+        "is_eccu": bool(country_norm in _ECCU_SET),
+        "source": source,
+        "ts": int(time.time()),
     }
 
-    def _normalize_country(country_name: str | None, country_code: str | None) -> str | None:
-        if country_name:
-            return country_name
-        if country_code and country_code in ECCU_COUNTRY_CODES:
-            return ECCU_COUNTRY_CODES[country_code]
-        return country_name or country_code
+def _cached_location_valid(loc: dict) -> bool:
+    if not isinstance(loc, dict):
+        return False
+    ts = loc.get("ts") or 0
+    # 24h TTL
+    return (time.time() - ts) < 24 * 3600 and bool(loc.get("country"))
 
-    def _finalize(loc: dict) -> dict:
-        country_name = loc.get("country")
-        if isinstance(country_name, str) and len(country_name) == 2 and country_name.isalpha():
-            mapped = ECCU_COUNTRY_CODES.get(country_name.upper())
-            if mapped:
-                loc["country"] = mapped
-        if loc.get("country") in ECCU_COUNTRIES:
-            loc["is_eccu"] = True
-        st.session_state.user_location = loc
-        if os.getenv("DEBUG_LOCATION"):
-            print(loc)
+def _ip_provider_ipwhois() -> dict | None:
+    try:
+        r = requests.get("https://ipwho.is/", timeout=8)
+        j = r.json()
+        if not j.get("success"):
+            return None
+        return _build_location(
+            j.get("country"),
+            city=j.get("city"),
+            lat=j.get("latitude"),
+            lon=j.get("longitude"),
+            source="ipwho.is",
+        )
+    except Exception:
+        return None
+
+def _ip_provider_ipapi_co() -> dict | None:
+    try:
+        r = requests.get("https://ipapi.co/json/", timeout=8)
+        j = r.json()
+        country = j.get("country_name")
+        if not country:
+            return None
+        return _build_location(
+            country,
+            city=j.get("city"),
+            lat=j.get("latitude") or j.get("lat"),
+            lon=j.get("longitude") or j.get("lon"),
+            source="ipapi.co",
+        )
+    except Exception:
+        return None
+
+def _ip_provider_ipinfo() -> dict | None:
+    try:
+        r = requests.get("https://ipinfo.io/json", timeout=8)
+        j = r.json()
+        cc = j.get("country")  # e.g., "US"
+        city = j.get("city")
+        lat, lon = (None, None)
+        loc = j.get("loc")
+        if isinstance(loc, str) and "," in loc:
+            try:
+                lat, lon = [float(x) for x in loc.split(",", 1)]
+            except Exception:
+                pass
+        country = None
+        if cc:
+            try:
+                country = pycountry.countries.lookup(cc).name
+            except Exception:
+                pass
+        if not country:
+            return None
+        return _build_location(country, city=city, lat=lat, lon=lon, source="ipinfo.io")
+    except Exception:
+        return None
+
+def detect_user_location(force_refresh: bool = False) -> dict:
+    """Prefer the wizard profile; otherwise try multiple IP providers. Cached with 24h TTL."""
+    # Manual override for demos
+    forced = st.secrets.get("FORCE_COUNTRY") if hasattr(st, "secrets") else None
+    if forced:
+        loc = _build_location(forced, source="secret.FORCE_COUNTRY")
+        st.session_state["user_location"] = loc
         return loc
 
-    headers = {"User-Agent": "Mozilla/5.0 (Streamlit App)"}
-    providers = ["ipapi", "ipwhois", "ipapi_alt", "ipinfo"]
+    # Cached value
+    if not force_refresh:
+        cached = st.session_state.get("user_location")
+        if _cached_location_valid(cached):
+            return cached
 
-    for provider in providers:
-        try:
-            if provider == "ipapi":
-                resp = requests.get("https://ipapi.co/json/", timeout=8, headers=headers)
-                if resp.ok:
-                    data = resp.json()
-                    country_name = _normalize_country(data.get("country_name"), data.get("country"))
-                    if country_name or data.get("city"):
-                        location["country"] = country_name
-                        location["region"] = data.get("region")
-                        location["city"] = data.get("city")
-                        location["latitude"] = data.get("latitude")
-                        location["longitude"] = data.get("longitude")
-                        return _finalize(location)
+    # Wizard profile (most reliable)
+    prof = st.session_state.get("user_profile") or {}
+    prof_country = _normalize_country_name(prof.get("country"))
+    if prof_country:
+        loc = _build_location(prof_country, source="profile")
+        st.session_state["user_location"] = loc
+        return loc
 
-            if provider == "ipwhois":
-                resp = requests.get("https://ipwho.is/", timeout=8, headers=headers)
-                if resp.ok:
-                    data = resp.json()
-                    if data.get("success"):
-                        location["country"] = _normalize_country(data.get("country"), data.get("country_code"))
-                        location["region"] = data.get("region")
-                        location["city"] = data.get("city")
-                        location["latitude"] = data.get("latitude")
-                        location["longitude"] = data.get("longitude")
-                        if any([location["country"], location["city"], location["region"]]):
-                            return _finalize(location)
+    # IP fallbacks (server-sided, may be hosting region)
+    for provider in (_ip_provider_ipwhois, _ip_provider_ipapi_co, _ip_provider_ipinfo):
+        loc = provider()
+        if loc:
+            st.session_state["user_location"] = loc
+            return loc
 
-            if provider == "ipapi_alt":
-                resp = requests.get("https://ip-api.com/json/", timeout=8, headers=headers)
-                if resp.ok:
-                    data = resp.json()
-                    if data.get("status") == "success":
-                        location["country"] = _normalize_country(data.get("country"), data.get("countryCode"))
-                        location["region"] = data.get("regionName")
-                        location["city"] = data.get("city")
-                        location["latitude"] = data.get("lat")
-                        location["longitude"] = data.get("lon")
-                        return _finalize(location)
+    # Nothing found; return empty location
+    loc = _build_location(country="", city="", source="none")
+    st.session_state["user_location"] = loc
+    return loc
 
-            if provider == "ipinfo":
-                resp = requests.get("https://ipinfo.io/json", timeout=8, headers=headers)
-                if resp.ok:
-                    data = resp.json()
-                    loc_str = data.get("loc")
-                    if isinstance(loc_str, str) and "," in loc_str:
-                        lat_str, lon_str = loc_str.split(",", 1)
-                        try:
-                            location["latitude"] = float(lat_str)
-                            location["longitude"] = float(lon_str)
-                        except Exception:
-                            pass
-                    location["country"] = _normalize_country(None, data.get("country"))
-                    location["region"] = data.get("region")
-                    location["city"] = data.get("city")
-                    if any([location["country"], location["city"], location["region"]]):
-                        return _finalize(location)
-                    
-        except Exception:
-            print(f"Location provider {provider} failed or returned no data.")
-            continue
-    print(f"Location provider {provider} failed or returned no data.")
-    return _finalize(location)
-
-
+# ----------------------------
+# Persona + instructions
+# ----------------------------
 def build_persona_guidelines(location: dict) -> str:
     country = location.get("country") or ""
     if location.get("is_eccu"):
@@ -249,10 +324,21 @@ def build_persona_guidelines(location: dict) -> str:
         "- Use the user's local currency if known, otherwise USD; convert with tools."
     )
 
-
 def build_instructions(location: dict) -> str:
     persona = build_persona_guidelines(location)
-    return INSTRUCTION_TEMPLATE.format(
+    profile = st.session_state.get("user_profile", {}) or {}
+    tone_pref = profile.get("tone", "Friendly")
+    goals = profile.get("goals", [])
+    goals_str = ", ".join(goals) if goals else "general financial literacy"
+
+    template = INSTRUCTION_TEMPLATE + f"""
+User preferences:
+- Preferred tone: {tone_pref}
+- Primary goals: {goals_str}
+
+When writing, mirror the preferred tone and favor suggestions that advance the user's stated goals.
+"""
+    return template.format(
         country=location.get("country"),
         region=location.get("region"),
         city=location.get("city"),
@@ -263,11 +349,14 @@ def build_instructions(location: dict) -> str:
     )
 
 
+# ----------------------------
+# Agent runner
+# ----------------------------
 def agent(message, image=None, location=None):
     instructions = build_instructions(location or {})
     _agent = Agent(
         name="💼 Financial AI Agent",
-        model=OpenRouter(id="google/gemini-2.5-flash", api_key="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", max_tokens=8000),
+        model=OpenRouter(id=MODEL_ID, api_key=API_KEY, max_tokens=8000),
         tools=[
             DuckDuckGoTools(),
             YFinanceTools(historical_prices=True),

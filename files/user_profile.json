@@ -1,0 +1,20 @@
+{
+  "setup_complete": true,
+  "name": "Max Ro",
+  "role": "Student",
+  "home_region": "ECCU",
+  "country": "Montserrat",
+  "auto_currency": true,
+  "base_currency": "XCD",
+  "tone": "Friendly",
+  "goals": [
+    "Budgeting",
+    "Saving"
+  ],
+  "email": "Jamesg@gmail.com",
+  "allow_location": true,
+  "avatar_svg": null,
+  "avatar_png": null,
+  "avatar_config": null,
+  "is_eccu": true
+}
