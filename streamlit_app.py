@@ -30,11 +30,6 @@ st.sidebar.title("Menu")
 menu = st.sidebar.radio("Navigate", [
     "🏝️ Intro",
     "🤖 AI Chat Bot",
-    "💱 Currency Converter",
-    "🌍 Caribbean Saving & Investing",
-    "📊 Budget Plan Generator",
-    "🚨 Common Scams",
-    "🧵 Small Hustles",
     "🧠 Financial Literacy Quiz",
     "📚 Resources"
 ], key="menu")
@@ -69,30 +64,8 @@ elif menu == "🤖 AI Chat Bot":
     render_chatbot()
 
 
-
-elif menu == "💱 Currency Converter":
-    converter()
-
-
-elif menu == "📊 Budget Plan Generator":
-    gen_budget()
-
-
-elif menu == "🌍 Caribbean Saving & Investing":
-    invest()
-
-
-elif menu == "🧵 Small Hustles":
-    run_small_hustles()
-
-
 elif menu == "🧠 Financial Literacy Quiz":
    start_quiz()
-
-
-elif menu == "🚨 Common Scams":
-    run_common_scams()
-
 
 elif menu == "📚 Resources":
     st.header("📚 Regional Financial Education Resources")
