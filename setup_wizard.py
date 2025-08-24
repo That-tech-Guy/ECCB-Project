@@ -2,16 +2,20 @@
 from __future__ import annotations
 import json
 from pathlib import Path
+from datetime import datetime, timezone
+import re
 import streamlit as st
 from avatar_builder import avatar_editor
 
 DATA_DIR = Path("files")
 PROFILE = DATA_DIR / "user_profile.json"
+CONVO_DIR = DATA_DIR / "conversations"
+CONVO_DIR.mkdir(parents=True, exist_ok=True)
 
 DEFAULTS = {
     "setup_complete": False,
     "name": "",
-    "role": "Student",            # Student | Teacher | Parent
+    "role": "Student",            # Student | Young Adult | Adult
     "home_region": "ECCU",        # ECCU | Caribbean (non-ECCU) | Global / Other
     "country": "Montserrat",
     "auto_currency": True,
@@ -20,9 +24,14 @@ DEFAULTS = {
     "goals": [],                  # e.g. ["Budgeting","Saving","Investing","Debt reduction"]
     "email": "",
     "allow_location": True,
+    # Avatar fields are kept for downstream use (chat bubbles, etc.)
     "avatar_svg": None,
     "avatar_png": None,
     "avatar_config": None,
+    # Bookkeeping (added/maintained automatically)
+    "is_eccu": None,
+    "visits": 0,
+    "last_seen_at": None,
 }
 
 ECCU_COUNTRIES = [
@@ -30,7 +39,6 @@ ECCU_COUNTRIES = [
     "Montserrat", "St. Kitts & Nevis", "St. Lucia", "St. Vincent & the Grenadines",
 ]
 CARIB_NON_ECCU = ["Barbados", "Trinidad & Tobago", "Jamaica", "Bahamas", "Haiti", "Cuba", "Dominican Republic"]
-
 COUNTRIES = ECCU_COUNTRIES + CARIB_NON_ECCU
 
 # Country -> currency map for our region
@@ -52,19 +60,31 @@ COMMON_WORLD_CURRENCIES = [
 
 GOAL_OPTIONS = ["Budgeting", "Saving", "Investing", "Debt reduction", "Business ideas", "Fraud awareness"]
 TONES = ["Friendly", "Professional", "Youthful", "Formal", "Concise"]
-ROLES = ["Student", "Teacher", "Parent"]
+ROLES = ["Student", "Young Adult", "Adult"]
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Core profile I/O
+# ──────────────────────────────────────────────────────────────────────────────
+def _sanitize_email(email: str) -> str:
+    email = (email or "").strip().lower().replace("@", "_at_").replace(".", "_")
+    return re.sub(r"[^a-z0-9_]+", "", email) or "guest"
 
 def load_profile() -> dict:
     DATA_DIR.mkdir(exist_ok=True, parents=True)
     if PROFILE.exists():
         try:
-            return {**DEFAULTS, **json.loads(PROFILE.read_text())}
+            loaded = json.loads(PROFILE.read_text())
+            # merge to keep any new keys in DEFAULTS
+            p = {**DEFAULTS, **loaded}
+            return p
         except Exception:
             return DEFAULTS.copy()
     return DEFAULTS.copy()
 
 def save_profile(p: dict) -> None:
     DATA_DIR.mkdir(exist_ok=True, parents=True)
+    # derive is_eccu on save
+    p["is_eccu"] = p.get("home_region") == "ECCU" or p.get("country") in ECCU_COUNTRIES
     PROFILE.write_text(json.dumps(p, indent=2))
     # keep session in sync for immediate use in chat
     st.session_state["user_profile"] = p
@@ -81,11 +101,64 @@ def _world_currency_list():
     except Exception:
         return sorted(set(COMMON_WORLD_CURRENCIES))
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Conversation logging helpers (per-user JSONL)
+# ──────────────────────────────────────────────────────────────────────────────
+def _convo_path_for(email: str) -> Path:
+    return CONVO_DIR / f"{_sanitize_email(email)}.jsonl"
+
+def log_message(role: str, content: str, email: str | None = None, meta: dict | None = None) -> None:
+    """
+    Append one message to the per-user conversation log as JSON Lines.
+    Safe to call repeatedly from your chatbot after each send/receive.
+    """
+    prof = st.session_state.get("user_profile") or load_profile()
+    email = email or prof.get("email") or "guest"
+    entry = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "role": role,
+        "content": content,
+        "meta": meta or {},
+    }
+    p = _convo_path_for(email)
+    with p.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Guard to require setup when AI loads
+# ──────────────────────────────────────────────────────────────────────────────
+def ensure_profile_on_load() -> None:
+    """
+    Call this at the top of your AI page BEFORE rendering chat.
+    - If no completed profile, opens the setup wizard and halts the page.
+    - If a profile exists, refreshes last_seen_at/visits and persists.
+    """
+    p = st.session_state.get("user_profile") or load_profile()
+
+    # If profile incomplete or missing email, force wizard
+    if not p.get("setup_complete") or not p.get("email"):
+        st.info("Let’s set up your profile to get started.")
+        done = render_setup_wizard()
+        if not done:
+            # Wizard is still active — pause the AI page.
+            st.stop()
+        return
+
+    # Profile exists — bump visits and last_seen
+    p["visits"] = int(p.get("visits") or 0) + 1
+    p["last_seen_at"] = datetime.now(timezone.utc).isoformat()
+    save_profile(p)  # also syncs session
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Wizard UI
+# ──────────────────────────────────────────────────────────────────────────────
 def render_setup_wizard() -> bool:
-    st.title("👋 Quick Setup")
+    st.markdown("<h1 style='color:#ff0000;'>Welcome to SoufrièreSense AI🌋</h1>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color:green;'>Erupting Smart Money Choices Across the Caribbean</h3>", unsafe_allow_html=True)
+
 
     p = load_profile()
-    st.write("Let’s personalize the assistant. Not in the Caribbean? No problem — choose **Global / Other** below.")
+    st.write("This is a Quick Setup to personalize the assistant. Not in the Caribbean? No problem — choose **Global / Other** below.")
 
     # ── Step 1 — Region, Who & Where
     with st.container(border=True):
@@ -99,7 +172,7 @@ def render_setup_wizard() -> bool:
             )
         with c1:
             p["name"] = st.text_input("Name (optional)", value=p["name"])
-            p["role"] = st.selectbox("I am a…", ROLES, index=ROLES.index(p["role"]))
+            p["role"] = st.selectbox("I am a…", ROLES, index=max(0, ROLES.index(p.get("role") or "Student")))
         with c2:
             if p["home_region"] == "ECCU":
                 p["country"] = st.selectbox("Country", ECCU_COUNTRIES, index=max(0, ECCU_COUNTRIES.index(p["country"]) if p["country"] in ECCU_COUNTRIES else 0))
@@ -109,6 +182,16 @@ def render_setup_wizard() -> bool:
             else:
                 # Global — freeform country
                 p["country"] = st.text_input("Country (any)", value=p["country"])
+
+        # ── Step 4 — Permissions & Email
+    with st.container(border=True):
+        st.subheader("Permissions & contact")
+        p["allow_location"] = st.toggle(
+            "Allow location hints (for ECCU slang, local examples, etc.)",
+            value=p["allow_location"]
+        )
+        # Email REQUIRED on save (but you may skip the wizard entirely)
+        p["email"] = st.text_input("Email (required to save)", value=p["email"], help="Used for receipts/notes & account recovery")
 
     # ── Step 2 — Currency behaviour
     with st.container(border=True):
@@ -138,7 +221,6 @@ def render_setup_wizard() -> bool:
     # ── Step 3 — Tone & Goals
     with st.container(border=True):
         st.subheader("Tone & goals")
-        # Keep your previous tone but widen choices
         tone_default = p.get("tone") if p.get("tone") in TONES else "Friendly"
         p["tone"] = st.selectbox("Assistant tone", TONES, index=TONES.index(tone_default))
         p["goals"] = st.multiselect(
@@ -157,22 +239,17 @@ def render_setup_wizard() -> bool:
             p["avatar_svg"] = saved.get("svg_path")
             p["avatar_png"] = saved.get("png_path")
             p["avatar_config"] = saved.get("config")
+            save_profile(p)  # <-- persist immediately so reloads show the avatar
             st.success("Avatar ready! It will be used in chat and navigation.")
 
-    # ── Step 4 — Permissions & Email
-    with st.container(border=True):
-        st.subheader("Permissions & contact")
-        p["allow_location"] = st.toggle(
-            "Allow location hints (for ECCU slang, local examples, etc.)",
-            value=p["allow_location"]
-        )
-        # Email REQUIRED on save (but you may skip the wizard entirely)
-        p["email"] = st.text_input("Email (required to save)", value=p["email"], help="Used for receipts/notes & account recovery")
+
+
 
     # ── Finalize
     c1, c2, c3 = st.columns(3)
     with c1:
         if st.button("Skip for now"):
+            # Mark session as ready, but do not mark setup_complete or save changes
             st.session_state["bot_setup_done"] = True
             return True
 
@@ -187,7 +264,11 @@ def render_setup_wizard() -> bool:
             # Mark ECCU membership for downstream logic
             p["is_eccu"] = p["home_region"] == "ECCU" or p["country"] in ECCU_COUNTRIES
 
+            # Bookkeeping on first save or update
             p["setup_complete"] = True
+            p["visits"] = int(p.get("visits") or 0) + 1
+            p["last_seen_at"] = datetime.now(timezone.utc).isoformat()
+
             save_profile(p)
             st.session_state["bot_setup_done"] = True
             st.success("Saved! Opening chat…")

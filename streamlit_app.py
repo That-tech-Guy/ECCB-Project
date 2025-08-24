@@ -21,15 +21,15 @@ from pathlib import Path
 # --- PAGE CONFIG ---
 st.set_page_config(
     page_title="Smart Finances Caribbean",
-    page_icon="💰"
+    page_icon="🌋"
 )
 
 # --- SIDEBAR MENU ---
 st.sidebar.image("images/eccb.png", width=100)
 st.sidebar.title("Menu")
 menu = st.sidebar.radio("Navigate", [
-    "🏝️ Intro",
-    "🤖 AI Chat Bot",
+    "🌋 SoufrièreSense AI",
+    "🏝️ About Us",
     "🧠 Financial Literacy Quiz",
     "📚 Resources"
 ], key="menu")
@@ -47,21 +47,26 @@ st.markdown("""
 
 
 # --- PAGE CONTENT ---
-if menu == "🏝️ Intro":
-    run_into()
+
     
 
-elif menu == "🤖 AI Chat Bot":
-    # First-run guard
-    profile = get_user_profile()
-    if not profile.get("setup_complete") and not st.session_state.get("bot_setup_done"):
+if menu == "🌋 SoufrièreSense AI":
+    # Unique session guard
+    if "user_profile" not in st.session_state:
+        st.session_state["user_profile"] = {"setup_complete": False}
+
+    profile = st.session_state["user_profile"]
+
+    if not profile.get("setup_complete"):
         done = render_setup_wizard()
         if not done:
-            st.stop()  # show only the wizard on first visit
+            st.stop()  # force wizard on each new session
+    else:
+        render_chatbot()
 
-    # Optional: make profile available to the chat
-    st.session_state["user_profile"] = get_user_profile()
-    render_chatbot()
+
+elif menu == "🏝️ About Us":
+    run_into()
 
 
 elif menu == "🧠 Financial Literacy Quiz":

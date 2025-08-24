@@ -1,3 +1,6 @@
+# chatbot.py
+from __future__ import annotations
+from typing import Optional
 from dotenv import load_dotenv
 import streamlit as st
 import tempfile
@@ -5,22 +8,15 @@ import PyPDF2
 import os
 import requests
 import base64, mimetypes
+from pathlib import Path
 
 # Import the modularized agent utilities
 from agent import detect_user_location, agent as run_agent
+from setup_wizard import ensure_profile_on_load, log_message, get_user_profile
 
-# -------------------------
-# Avatar loader (data-URI)
-# -------------------------
-def _avatar_src_from_profile(profile: dict) -> str:
-    """Return a data-URI for avatar_png/svg if present; else emoji."""
-    p = (profile or {}).get("avatar_png") or (profile or {}).get("avatar_svg")
-    if p and os.path.exists(p):
-        mime = mimetypes.guess_type(p)[0] or ("image/png" if p.endswith(".png") else "image/svg+xml")
-        with open(p, "rb") as f:
-            b64 = base64.b64encode(f.read()).decode()
-        return f"data:{mime};base64,{b64}"
-    return "👤"
+# 🔒 Force profile setup if missing; update profile if it already exists
+ensure_profile_on_load()
+profile = get_user_profile()  # used for avatar + per-user logging (email)
 
 load_dotenv()
 
@@ -34,7 +30,7 @@ def extract_pdf_text(pdf_file):
         text_content = ""
         for page_num in range(len(pdf_reader.pages)):
             page = pdf_reader.pages[page_num]
-            text_content += page.extract_text() + "\n"
+            text_content += (page.extract_text() or "") + "\n"
         return text_content.strip()
     except Exception as e:
         return f"Error reading PDF: {str(e)}"
@@ -53,6 +49,59 @@ def read_text_file(file):
             return f"Error reading file: {str(e)}"
 
 # =========================
+# Avatar loader (prefer PNG path; convert SVG if needed)
+# =========================
+def _avatar_src_from_profile(profile: dict) -> str:
+    """
+    Return a path for Streamlit chat avatar.
+      1) Prefer PNG path (session, then profile).
+      2) If only SVG exists, try convert to PNG; if that fails, return the SVG path.
+      3) Last resort: emoji.
+    """
+    def _svg_to_png(svg_path: str) -> Optional[str]:
+        try:
+            import cairosvg  # optional dependency
+        except Exception:
+            return None
+        try:
+            svg_path = os.path.abspath(svg_path)
+            png_path = str(Path(svg_path).with_suffix(".png"))
+            with open(svg_path, "rb") as f:
+                cairosvg.svg2png(bytestring=f.read(), write_to=png_path, output_width=512, output_height=512)
+            return png_path if os.path.exists(png_path) else None
+        except Exception:
+            return None
+
+    # 1) Session (freshly saved this run)
+    paths = st.session_state.get("avatar_saved_paths") or {}
+    png = paths.get("png")
+    svg = paths.get("svg")
+    if png and os.path.exists(png):
+        return png
+    if svg and os.path.exists(svg):
+        # Try convert once
+        png2 = _svg_to_png(svg)
+        if png2 and os.path.exists(png2):
+            st.session_state.setdefault("avatar_saved_paths", {})["png"] = png2
+            return png2
+        # Fallback: use SVG path directly
+        return svg
+
+    # 2) Persisted profile
+    p_png = (profile or {}).get("avatar_png")
+    if p_png and os.path.exists(p_png):
+        return p_png
+    p_svg = (profile or {}).get("avatar_svg")
+    if p_svg and os.path.exists(p_svg):
+        png2 = _svg_to_png(p_svg)
+        if png2 and os.path.exists(png2):
+            return png2
+        return p_svg  # fallback to SVG path
+
+    # 3) Emoji fallback
+    return "👤"
+
+# =========================
 # Quick Actions menu helper
 # =========================
 def _show_menu():
@@ -68,24 +117,33 @@ def render_chatbot():
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    st.title("💼 Financial AI Agent")
+    st.title("🌋 SoufrièreSense AI")
 
-    # 🌐 Detect user location early and show a tiny badge
-    location = detect_user_location()
-    loc_country = location.get("country") or "Unknown"
-    loc_city = location.get("city") or ""
-    loc_is_eccu = location.get("is_eccu")
-    badge = f"📍 {loc_city + ', ' if loc_city else ''}{loc_country}"
-    st.caption(badge + ("  ·  ECCU" if loc_is_eccu else "  ·  Global"))
+    # 🌐 Prefer profile country; fallback to live detection
+    profile_country = profile.get("country")
+    profile_region  = "ECCU" if profile.get("is_eccu") else "Global"
 
-    # ── Sidebar controls (always visible) ─────────────────────────────
-    with st.sidebar:
-        if st.button("☰ Menu", key="sb_menu"):
-            _show_menu()
-            st.rerun()
-        if st.button("⚙️ Edit Setup", key="sb_setup"):
-            st.session_state["open_setup_now"] = True
-            st.rerun()
+    # Always define location (so run_agent(...) never sees an undefined variable)
+    location = {
+        "country": profile_country or "Unknown",
+        "city": None,
+        "is_eccu": profile.get("is_eccu", False)
+    }
+
+    if profile_country:
+        badge = f"📍 {profile_country}"
+    else:
+        try:
+            location = detect_user_location()
+            loc_country = location.get("country") or "Unknown"
+            loc_city = location.get("city") or ""
+            badge = f"📍 {loc_city + ', ' if loc_city else ''}{loc_country}"
+            profile_region = "ECCU" if location.get("is_eccu") else "Global"
+        except Exception:
+            badge = "📍 Unknown"
+
+    st.caption(badge + f" · {profile_region}")
+
 
     # Inline open of the setup wizard if requested
     if st.session_state.get("open_setup_now"):
@@ -108,27 +166,25 @@ def render_chatbot():
             _show_menu()
             st.rerun()
 
-    # === Quick Actions (first load) ===
-    if "chat_quick_actions_shown" not in st.session_state:
-        st.session_state["chat_quick_actions_shown"] = False
 
-    # Preload avatars (data-URI) for both bubble renders below
-    profile = st.session_state.get("user_profile", {}) or {}
-    user_avatar_src = _avatar_src_from_profile(profile)
-    bot_avatar_src  = "🧠"  # replace with your brand data-URI if you like
+
+    # Preload avatars (file path or emoji) for bubble renders
+    profile_local = st.session_state.get("user_profile", {}) or profile or {}
+    user_avatar_src = _avatar_src_from_profile(profile_local)
+    bot_avatar_src  = "🌋"  # replace with a file path to your brand logo if desired
 
     # -----------------------------
     # Currency converter quick flow
     # -----------------------------
     def _currency_quick_flow():
         """Guided currency conversion with ECCU/Caribbean vs World sets,
-        auto base from location (if allowed), and strong validation."""
+        auto base from profile country first (then location if allowed), and strong validation."""
         st.subheader("💱 Quick Currency Converter")
 
         # --- Defaults & helpers ---
-        profile = st.session_state.get("user_profile", {})
-        allow_loc = bool(profile.get("allow_location", True))
-        selected_base = (profile.get("base_currency") or "XCD").upper()
+        p = st.session_state.get("user_profile", {}) or profile_local
+        allow_loc = bool(p.get("allow_location", True))
+        selected_base = (p.get("base_currency") or "XCD").upper()
 
         # ECCU & Caribbean list
         CARIBBEAN = ["XCD", "JMD", "TTD", "BBD", "BSD", "HTG", "CUP", "DOP"]
@@ -140,14 +196,14 @@ def render_chatbot():
             "United States": "USD", "United Kingdom": "GBP", "Canada": "CAD", "Eurozone": "EUR",
         }
 
-        # If allowed, try to auto-set base from live location
+        # Prefer profile country; fallback to live detection only if allowed and profile is empty
         try:
-            if allow_loc:
+            ctry = (p.get("country") or "").strip()
+            if (not ctry) and allow_loc:
                 loc = detect_user_location()
                 ctry = (loc.get("country") or "").strip()
-                if ctry in COUNTRY_TO_CUR:
-                    selected_base = COUNTRY_TO_CUR[ctry]
-                    st.info(f"Using detected base currency **{selected_base}** from your location ({ctry}). You can override below.")
+            if ctry in COUNTRY_TO_CUR:
+                selected_base = COUNTRY_TO_CUR[ctry]
         except Exception:
             pass
 
@@ -157,13 +213,13 @@ def render_chatbot():
 
         if set_choice == "ECCU & Caribbean":
             eccu_carib = sorted(set(["XCD"] + CARIBBEAN))
-            target = st.selectbox("Target currency", eccu_carib, index=(eccu_carib.index("USD") if "USD" in eccu_carib else 0))
+            idx = eccu_carib.index("USD") if "USD" in eccu_carib else 0
+            target = st.selectbox("Target currency", eccu_carib, index=idx)
         else:
             try:
                 import pycountry
                 world = sorted({c.alpha_3 for c in pycountry.currencies if hasattr(c, "alpha_3") and len(c.alpha_3) == 3})
             except Exception:
-                # fallback minimal list if pycountry unavailable
                 world = ["USD", "GBP", "EUR", "CAD", "JMD", "TTD", "BBD", "BSD", "XCD"]
             for bad in ["XTS", "XXX"]:
                 if bad in world:
@@ -220,8 +276,8 @@ def render_chatbot():
                 st.subheader("📈 Investing ideas for your EC$")
 
                 # Prefer setup wizard country; else try live location; else let user pick
-                profile = st.session_state.get("user_profile", {}) or {}
-                country = (profile.get("country") or "").strip()
+                pp = st.session_state.get("user_profile", {}) or {}
+                country = (pp.get("country") or "").strip()
 
                 # normalize common short forms
                 _ALIASES = {
@@ -259,7 +315,7 @@ def render_chatbot():
                     country = st.selectbox("Pick your ECCU country", ECCU_COUNTRIES)
 
                 # Heuristic age group from setup role
-                role = (profile.get("role") or "").lower()
+                role = (pp.get("role") or "").lower()
                 age_group = "youth" if role == "student" else "adult"
 
                 # Try to use your investing tool; if it doesn't return a list, fall back to local data
@@ -391,23 +447,7 @@ def render_chatbot():
             _show_menu()
             st.rerun()
 
-    # Show quick actions panel once
-    if not st.session_state["chat_quick_actions_shown"]:
-        with st.container(border=True):
-            st.write("Quick actions:")
-            cols = st.columns(4)
-            if cols[0].button("💱 Convert Currency"):
-                st.session_state["chat_quick_actions_shown"] = True
-                st.session_state["chat_mode"] = "currency"
-            if cols[1].button("📊 Budget Plan"):
-                st.session_state["chat_quick_actions_shown"] = True
-                st.session_state["chat_mode"] = "budget"
-            if cols[2].button("🧵 Small Hustles"):
-                st.session_state["chat_quick_actions_shown"] = True
-                st.session_state["chat_mode"] = "hustles"
-            if cols[3].button("🚨 Scam Check"):
-                st.session_state["chat_quick_actions_shown"] = True
-                st.session_state["chat_mode"] = "scam"
+
 
     # Render selected quick action flow
     mode = st.session_state.get("chat_mode")
@@ -434,6 +474,36 @@ def render_chatbot():
         avatar = user_avatar_src if msg["role"] == "user" else bot_avatar_src
         with st.chat_message(msg["role"], avatar=avatar):
             st.markdown(msg["content"])
+
+      # --- Quick actions panel at the bottom (above chat input) ---
+    # Initialize flags once
+    if "chat_quick_actions_shown" not in st.session_state:
+        st.session_state["chat_quick_actions_shown"] = False
+
+    # If user typed "menu", _show_menu() already set the flags & did rerun.
+    # Now render the panel here at the bottom:
+    if not st.session_state["chat_quick_actions_shown"]:
+        st.markdown("---")
+        with st.container(border=True):
+            st.write("Quick actions:")
+            cols = st.columns(4)
+            if cols[0].button("💱 Convert Currency", key="qa_currency"):
+                st.session_state["chat_quick_actions_shown"] = True
+                st.session_state["chat_mode"] = "currency"
+                st.rerun()
+            if cols[1].button("📊 Budget Plan", key="qa_budget"):
+                st.session_state["chat_quick_actions_shown"] = True
+                st.session_state["chat_mode"] = "budget"
+                st.rerun()
+            if cols[2].button("🧵 Small Hustles", key="qa_hustles"):
+                st.session_state["chat_quick_actions_shown"] = True
+                st.session_state["chat_mode"] = "hustles"
+                st.rerun()
+            if cols[3].button("🚨 Scam Check", key="qa_scam"):
+                st.session_state["chat_quick_actions_shown"] = True
+                st.session_state["chat_mode"] = "scam"
+                st.rerun()
+
 
     # 📥 Chat input (with file upload)
     if data := st.chat_input("Ask me anything... Type 'menu' or '/setup'.", accept_file=True):
@@ -493,6 +563,12 @@ def render_chatbot():
 
         # Add user message to chat history
         st.session_state.messages.append(user_message)
+
+        # ⏺️ Log the user message (per-user JSONL)
+        try:
+            log_message("user", user_message["content"], email=profile.get("email"))
+        except Exception:
+            pass
 
         # Display user message in chat (with avatar)
         with st.chat_message("user", avatar=user_avatar_src):
@@ -555,3 +631,9 @@ def render_chatbot():
         # Add assistant response to chat history
         assistant_message = {"role": "assistant", "content": full_response}
         st.session_state.messages.append(assistant_message)
+
+        # ⏺️ Log the assistant reply
+        try:
+            log_message("assistant", full_response, email=profile.get("email"))
+        except Exception:
+            pass

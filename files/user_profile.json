@@ -1,9 +1,9 @@
 {
   "setup_complete": true,
-  "name": "Max Ro",
+  "name": "Luton Liward",
   "role": "Student",
   "home_region": "ECCU",
-  "country": "Montserrat",
+  "country": "Dominica",
   "auto_currency": true,
   "base_currency": "XCD",
   "tone": "Friendly",
@@ -11,10 +11,27 @@
     "Budgeting",
     "Saving"
   ],
-  "email": "Jamesg@gmail.com",
+  "email": "fuha@gmail.com",
   "allow_location": true,
-  "avatar_svg": null,
+  "avatar_svg": "files/avatars/fuha_at_gmail_com_avatar.svg",
   "avatar_png": null,
-  "avatar_config": null,
-  "is_eccu": true
+  "avatar_config": {
+    "mode": "dicebear",
+    "style": "adventurer",
+    "seed": "fuha_at_gmail_com",
+    "radius": 0,
+    "size": 512,
+    "params": {
+      "hair": "",
+      "hairColor": "000000",
+      "eyes": "",
+      "eyebrows": "",
+      "mouth": "",
+      "glasses": "",
+      "skinColor": "E8C3A1"
+    }
+  },
+  "is_eccu": true,
+  "visits": 39,
+  "last_seen_at": "2025-08-24T15:32:29.675952+00:00"
 }
